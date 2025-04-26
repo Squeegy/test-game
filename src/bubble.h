@@ -11,6 +11,7 @@ namespace godot {
 
 	private:
 		double time_passed = 0.0;
+		float random_multiplier;
         
 
 	protected:

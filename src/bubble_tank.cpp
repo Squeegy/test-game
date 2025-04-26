@@ -45,7 +45,7 @@ void BubbleTank::_physics_process(double delta) {
 
     // Move forward/backward
     Vector2 direction = Vector2(cos(get_rotation()), sin(get_rotation()));
-    Vector2 velocity = Vector2();
+    Vector2 velocity = Vector2(0,0);
 
     if (Input::get_singleton()->is_action_pressed("move_forward")) {
         velocity += direction * move_speed;

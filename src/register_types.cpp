@@ -2,6 +2,7 @@
 
 #include "gdexample.h"
 #include "bubble_tank.h"
+#include "bubble_gun.h"
 #include "bubble.h"
 
 #include <gdextension_interface.h>
@@ -17,6 +18,7 @@ void initialize_example_module(ModuleInitializationLevel p_level) {
 
 	GDREGISTER_RUNTIME_CLASS(GDExample);
     GDREGISTER_RUNTIME_CLASS(BubbleTank);
+    GDREGISTER_RUNTIME_CLASS(BubbleGun);
     GDREGISTER_RUNTIME_CLASS(Bubble);
 }
 
