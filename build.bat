@@ -1,0 +1,3 @@
+@echo off
+echo Building GDExtension...
+scons platform=windows target=debug -j4

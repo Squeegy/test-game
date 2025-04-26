@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build GDExtension",
+            "type": "shell",
+            "command": "scons",
+            "args": ["platform=windows", "target=template_debug", "debug_symbols=yes"],
+            "group": {
+              "kind": "build",
+              "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "Build your Godot C++ extension"
+          }
+    ]
+}
