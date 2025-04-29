@@ -37,6 +37,7 @@ void BubbleGun::_ready() {
     bubbles.push_back(get_node<Bubble>(NodePath("Bubble2")));
     bubbles.push_back(get_node<Bubble>(NodePath("Bubble")));
 
+   
     for (int i = 0; i < bubbles.size(); i++) {
         Bubble* bubble = Object::cast_to<Bubble>(bubbles[i]);
         if (bubble) {

@@ -15,6 +15,12 @@ run/main_scene="uid://cc5odbxqi8adv"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[display]
+
+window/size/borderless=true
+window/size/transparent=true
+window/per_pixel_transparency/allowed=true
+
 [input]
 
 turn_left={

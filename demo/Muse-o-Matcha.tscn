@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://c2cxsx4o8eecq"]
+
+[ext_resource type="Texture2D" uid="uid://dprggmwg1yy00" path="res://Notey.png" id="1_62bns"]
+
+[node name="Muse-o-matcha" type="Node2D"]
+
+[node name="Notey" type="Notey" parent="."]
+texture = ExtResource("1_62bns")
+centered = false
