@@ -5,6 +5,8 @@
 #include "bubble_gun.h"
 #include "bubble.h"
 #include "notey.h"
+#include "hello.h"
+#include "audio_input.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -22,6 +24,8 @@ void initialize_example_module(ModuleInitializationLevel p_level) {
     GDREGISTER_RUNTIME_CLASS(BubbleGun);
     GDREGISTER_RUNTIME_CLASS(Bubble);
     GDREGISTER_RUNTIME_CLASS(Notey);
+    GDREGISTER_RUNTIME_CLASS(Hello);
+    GDREGISTER_RUNTIME_CLASS(AudioInput);
 }
 
 void uninitialize_example_module(ModuleInitializationLevel p_level) {

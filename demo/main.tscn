@@ -6,10 +6,10 @@
 
 [node name="Main" type="Node2D"]
 
-[node name="BubbleTank" type="BubbleTank" parent="."]
+[node name="BubbleTank" type="CharacterBody2D" parent="."]
 position = Vector2(583, 244)
 
-[node name="Bubble" type="Bubble" parent="BubbleTank"]
+[node name="Bubble" type="Sprite2D" parent="BubbleTank"]
 scale = Vector2(0.1, 0.1)
 texture = ExtResource("2_0xm2m")
 
@@ -18,27 +18,27 @@ scale = Vector2(4, 4)
 shape = SubResource("CircleShape2D_ig7tw")
 one_way_collision_margin = 4.5
 
-[node name="BubbleGun" type="BubbleGun" parent="BubbleTank"]
+[node name="BubbleGun" type="CharacterBody2D" parent="BubbleTank"]
 
-[node name="Bubble" type="Bubble" parent="BubbleTank/BubbleGun"]
+[node name="Bubble" type="Sprite2D" parent="BubbleTank/BubbleGun"]
 position = Vector2(35, -12)
 scale = Vector2(0.02, 0.02)
 texture = ExtResource("2_0xm2m")
 centered = false
 
-[node name="Bubble2" type="Bubble" parent="BubbleTank/BubbleGun"]
+[node name="Bubble2" type="Sprite2D" parent="BubbleTank/BubbleGun"]
 position = Vector2(55, -12)
 scale = Vector2(0.02, 0.02)
 texture = ExtResource("2_0xm2m")
 centered = false
 
-[node name="Bubble3" type="Bubble" parent="BubbleTank/BubbleGun"]
+[node name="Bubble3" type="Sprite2D" parent="BubbleTank/BubbleGun"]
 position = Vector2(73, -12)
 scale = Vector2(0.02, 0.02)
 texture = ExtResource("2_0xm2m")
 centered = false
 
-[node name="Bubble4" type="Bubble" parent="BubbleTank/BubbleGun"]
+[node name="Bubble4" type="Sprite2D" parent="BubbleTank/BubbleGun"]
 position = Vector2(93, -12)
 scale = Vector2(0.02, 0.02)
 texture = ExtResource("2_0xm2m")

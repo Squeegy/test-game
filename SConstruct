@@ -14,7 +14,8 @@ env = SConscript("godot-cpp-4.4/SConstruct")
 
 # tweak this if you want to use different folders, or more folders, to store your source code in.
 env.Append(CPPPATH=["src/"])
-sources = Glob("demo/src/*.cpp")
+VariantDir("build", "demo/src", duplicate=0)
+sources = Glob("build/*.cpp")
 
 env["optimize"] = "no"
 
@@ -41,5 +42,12 @@ else:
         "demo/bin/libgdexample{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
         source=sources,
     )
+
+if env["platform"] == "windows":
+    env.Append(CPPPATH=["C:/Users/willg/Documents/vcpkg/installed/x64-windows/include"])
+    env.Append(LIBPATH=["C:/Users/willg/Documents/vcpkg/installed/x64-windows/lib"])
+    env.Append(LIBS=["portaudio"])
+
+print("CPPPATH:", env.get("CPPPATH"))
 
 Default(library)
