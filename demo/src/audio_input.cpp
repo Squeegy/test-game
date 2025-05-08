@@ -14,37 +14,94 @@ AudioInput::~AudioInput() {
 void AudioInput::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_volume"), &AudioInput::get_volume);
     ClassDB::bind_method(D_METHOD("initialize_stream"), &AudioInput::initialize_stream);
+    ClassDB::bind_method(D_METHOD("_on_device_selected", "index"), &AudioInput::_on_device_selected);
+    ClassDB::bind_method(D_METHOD("_on_start_pressed"), &AudioInput::_on_start_pressed);
+    ClassDB::bind_method(D_METHOD("emit_note"), &AudioInput::emit_note);
+    ADD_SIGNAL(MethodInfo("note_detected",
+        PropertyInfo(Variant::STRING, "note"),
+        PropertyInfo(Variant::STRING, "octave"),
+        PropertyInfo(Variant::INT, "midi")));
 }
 
 void AudioInput::_ready() {
 
     Pa_Initialize();
 
-    PaStreamParameters input_params;
-    input_params.device = 8;
-    input_params.channelCount = 2;
-    input_params.sampleFormat = paFloat32;
-    input_params.suggestedLatency = Pa_GetDeviceInfo(input_params.device)->defaultLowInputLatency;
-    input_params.hostApiSpecificStreamInfo = nullptr;
+    // === CanvasLayer with VBox ===
+    auto *canvas = memnew(CanvasLayer);
+    add_child(canvas);
 
-    PaError err = Pa_OpenDefaultStream(&stream,
-                    1,
-                    0,
-                    paFloat32,
-                    44100,
-                    256,
-                    &AudioInput::pa_callback,
-                    this);
-    if (err != paNoError) {
-        UtilityFunctions::print("Error opening stream: ", Pa_GetErrorText(err));
-        return;
+    auto *vbox = memnew(VBoxContainer);
+    canvas->add_child(vbox);
+
+    // === Device Selector ===
+    device_selector = memnew(OptionButton);
+    device_selector->set_name("DeviceSelector");
+    vbox->add_child(device_selector);
+
+    // === Channel Selector ===
+    channel_selector = memnew(OptionButton);
+    channel_selector->set_name("ChannelSelector");
+    vbox->add_child(channel_selector);
+
+    // === Start Button ===
+    start_button = memnew(Button);
+    start_button->set_text("Start Stream");
+    vbox->add_child(start_button);
+
+    // === Enumerate Devices ===
+    int num_devices = Pa_GetDeviceCount();
+    for (int i = 0; i < num_devices; ++i) {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if (info && info->maxInputChannels > 0) {
+            String label = String(info->name) + " (" + String::num(info->maxInputChannels) + " ch)";
+            device_selector->add_item(label, i); // store device index as metadata
+            device_channel_counts[i] = info->maxInputChannels;
+        }
     }
-    Pa_StartStream(stream);
+
+    // === Default channel list for first device ===
+    if (device_selector->get_item_count() > 0) {
+        _update_channel_selector(device_selector->get_selected_id());
+    }
+
+    // === Connect Signals ===
+    device_selector->connect("item_selected", Callable(this, "_on_device_selected"));
+    start_button->connect("pressed", Callable(this, "_on_start_pressed"));
+
+    UtilityFunctions::print("🎛️ AudioInput UI ready");
 }
 
 void AudioInput::_process(double delta) {
     // Optionally print or update visuals here
     // UtilityFunctions::print("Volume: ", current_volume);
+}
+
+void AudioInput::_update_channel_selector(int device_index) {
+    if (!channel_selector) return;
+
+    channel_selector->clear();
+    int num_channels = device_channel_counts.get(device_index, 0);
+
+    for (int i = 0; i < num_channels; ++i) {
+        String label = "Channel " + String::num(i);
+        channel_selector->add_item(label, i);
+    }
+
+    channel_selector->select(0);
+}
+
+void AudioInput::_on_device_selected(int index) {
+    int device_index = device_selector->get_item_id(index);
+    _update_channel_selector(device_index);
+}
+
+void AudioInput::_on_start_pressed() {
+    int device_index = device_selector->get_selected_id();  // stored metadata
+    int channel_index = channel_selector->get_selected_id();
+
+    UtilityFunctions::print("🔈 Starting stream on device ", device_index, ", channel ", channel_index);
+    initialize_stream(device_index, channel_index);
 }
 
 void AudioInput::list_input_devices() {
@@ -65,6 +122,7 @@ void AudioInput::list_input_devices() {
 }
 
 void AudioInput::initialize_stream(int device_index, int channel_index) {
+    UtilityFunctions::print("Initializing stream on device ", device_index, ", channel ", channel_index);
     if (stream) {
         Pa_StopStream(stream);
         Pa_CloseStream(stream);
@@ -119,26 +177,32 @@ String AudioInput::get_current_note_octave() const {
     return current_octave;
 }
 
-int AudioInput::pa_callback(const void *input,
-                            void *,
-                            unsigned long frameCount,
-                            const PaStreamCallbackTimeInfo*,
-                            PaStreamCallbackFlags,
-                            void *userData) {
-    auto *self = static_cast<AudioInput *>(userData);
-    const float *input_buffer = (const float *)input;
+int AudioInput::get_current_midi() const {
+    return current_midi;
+}
+
+int AudioInput::pa_callback(const void* input,
+                                void*,
+                                unsigned long frameCount,
+                                const PaStreamCallbackTimeInfo*,
+                                PaStreamCallbackFlags,
+                                void* userData
+                            ) {
+    auto* self = static_cast<AudioInput*>(userData);
+    const float* input_buffer = (const float*)input;
 
     float sum = 0.0f;
-    for (unsigned long i = 0; i < frameCount; i++) {
-        sum += fabs(input_buffer[i]);
-    }
-    self->current_volume = sum / frameCount;
-
     for (unsigned long i = 0; i < frameCount; ++i) {
+        int index = i * self->active_channel_count + self->selected_channel;
+        float sample = input_buffer[index];
+        sum += fabs(sample);
+
         if (self->buffer_pos < self->BUFFER_SIZE) {
-            self->pitch_buffer[self->buffer_pos++] = input_buffer[i];  // Assuming mono
+            self->pitch_buffer[self->buffer_pos++] = sample;
         }
     }
+
+    self->current_volume = sum / frameCount;
 
     if (self->buffer_pos >= self->BUFFER_SIZE) {
         self->buffer_pos = 0;
@@ -151,34 +215,62 @@ int AudioInput::pa_callback(const void *input,
 
 void AudioInput::update_note_and_octave(float freq) {
     static int low_volume_counter = 0;
-    const int low_volume_threshold = 10; // Number of consecutive low-volume frames before clearing
+    const int low_volume_threshold = 8; // Number of consecutive low-volume frames before clearing
 
     if (freq > 0.0f) {
-        auto [note, octave] = frequency_to_note_name(freq);
+        auto [note, octave, midi] = frequency_to_note_name(freq);
         current_note = note;
         current_octave = octave;
+        current_midi = midi;
+        note_pending = true;
+        call_deferred("emit_note");
         low_volume_counter = 0; // Reset counter when a valid frequency is detected
     } else {
         low_volume_counter++;
         if (low_volume_counter >= low_volume_threshold) {
             current_note = "";
             current_octave = "";
+            current_midi = -1;
         }
     }
 }
 
+void AudioInput::emit_note() {
+    if (!note_pending) return;
+    UtilityFunctions::print("Emitting note: ", current_note, " (", current_octave, ", ", current_midi, ")");
+    emit_signal("note_detected", current_note, current_octave, current_midi);
+    note_pending = false;
+}
+
 float AudioInput::detect_pitch_autocorrelation(const float* buffer, int size, int sample_rate) {
-    int max_lag = size / 2;
-    int min_lag = sample_rate / 1000;  // Don't go below 1kHz
+    int max_lag = size - 1; // maximum lag for autocorrelation
+    // Let's support down to E1 (~41.2 Hz), so maybe 30 Hz to be safe
+    float lowest_expected_hz = 1000.0f;
+    int min_lag = int(sample_rate / 1000.0f);      // default
+    int safe_min_lag = int(sample_rate / lowest_expected_hz);  // ~1470 for 44100 Hz
+    min_lag = std::max(min_lag, safe_min_lag); // ensure we don't go below this
 
     float best_correlation = 0.0f;
     int best_lag = -1;
+
+    // === Apply a simple 6 dB/oct low-pass filter ===
+    float cutoff_hz = 1000.0f;
+    float RC = 1.0f / (2.0f * Math_PI * cutoff_hz);
+    float dt = 1.0f / sample_rate;
+    float alpha = dt / (RC + dt);
+
+    float* filtered = new float[size];
+    filtered[0] = buffer[0];  // seed the filter
+
+    for (int i = 1; i < size; ++i) {
+        filtered[i] = filtered[i - 1] + alpha * (buffer[i] - filtered[i - 1]);
+    }
 
     // Apply a Hanning window (optional but improves quality)
     float* windowed = new float[size];
     for (int i = 0; i < size; ++i) {
         float w = 0.5f * (1.0f - std::cos(2.0f * Math_PI * i / (size - 1)));
-        windowed[i] = buffer[i] * w;
+        windowed[i] = filtered[i] * w;
     }
 
     // Simple energy gate — skip if signal is too quiet
@@ -186,7 +278,7 @@ float AudioInput::detect_pitch_autocorrelation(const float* buffer, int size, in
     for (int i = 0; i < size; ++i) {
         energy += windowed[i] * windowed[i];
     }
-    if (energy / size < 0.001f) {
+    if (energy / size < 0.00001f) {
         delete[] windowed;
         return -1.0f;
     }
@@ -205,6 +297,7 @@ float AudioInput::detect_pitch_autocorrelation(const float* buffer, int size, in
     }
 
     delete[] windowed;
+    delete[] filtered;
 
     if (best_lag == -1) return -1.0f;
 
@@ -213,14 +306,40 @@ float AudioInput::detect_pitch_autocorrelation(const float* buffer, int size, in
 }
 
 
-std::pair<String, String> AudioInput::frequency_to_note_name(float freq) {
-    static const char* note_names[] = {
-        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
-    };
-
+std::tuple<String, String, int> AudioInput::frequency_to_note_name(float freq) {
     int midi = int(69 + 12 * log2(freq / 440.0f));
     int note_index = midi % 12;
     int octave = (midi / 12) - 1;
 
-    return { String(note_names[note_index]), String::num(octave) };
+    return std::make_tuple(String(AudioInput::get_note_names()[note_index]), String::num(octave), midi);
+}
+
+const String* AudioInput::get_note_names() {
+    static const String NOTE_NAMES[] = {
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+    };
+    return NOTE_NAMES;
+}
+
+const std::map<String, int>& AudioInput::get_note_to_midi() {
+    static const std::map<String, int> NOTE_TO_MIDI = {
+        // Sharps
+        { "C", 0 }, { "C#", 1 }, { "D", 2 }, { "D#", 3 }, { "E", 4 },
+        { "F", 5 }, { "F#", 6 }, { "G", 7 }, { "G#", 8 }, { "A", 9 },
+        { "A#", 10 }, { "B", 11 },
+    
+        // Flats (enharmonic equivalents)
+        { "Db", 1 }, { "Eb", 3 }, { "Gb", 6 }, { "Ab", 8 }, { "Bb", 10 }
+    };
+    return NOTE_TO_MIDI;
+}
+const std::map<String, String>& AudioInput::get_enharmonic_map() {
+    static const std::map<String, String> ENHARMONIC_MAP = {
+        {"C#", "Db"},
+        {"D#", "Eb"},
+        {"F#", "Gb"},
+        {"G#", "Ab"},
+        {"A#", "Bb"}
+    };
+    return ENHARMONIC_MAP;
 }
