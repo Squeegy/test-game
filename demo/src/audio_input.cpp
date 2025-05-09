@@ -17,10 +17,12 @@ void AudioInput::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_device_selected", "index"), &AudioInput::_on_device_selected);
     ClassDB::bind_method(D_METHOD("_on_start_pressed"), &AudioInput::_on_start_pressed);
     ClassDB::bind_method(D_METHOD("emit_note"), &AudioInput::emit_note);
+    ClassDB::bind_method(D_METHOD("emit_silence"), &AudioInput::emit_silence);
     ADD_SIGNAL(MethodInfo("note_detected",
         PropertyInfo(Variant::STRING, "note"),
         PropertyInfo(Variant::STRING, "octave"),
         PropertyInfo(Variant::INT, "midi")));
+    ADD_SIGNAL(MethodInfo("note_stopped"));
 }
 
 void AudioInput::_ready() {
@@ -215,15 +217,26 @@ int AudioInput::pa_callback(const void* input,
 
 void AudioInput::update_note_and_octave(float freq) {
     static int low_volume_counter = 0;
-    const int low_volume_threshold = 8; // Number of consecutive low-volume frames before clearing
+    const int low_volume_threshold = 4; // Number of consecutive low-volume frames before clearing
 
     if (freq > 0.0f) {
         auto [note, octave, midi] = frequency_to_note_name(freq);
-        current_note = note;
-        current_octave = octave;
-        current_midi = midi;
-        note_pending = true;
-        call_deferred("emit_note");
+
+        if (note != last_note) {
+            last_note = note;
+            debounce_timer = 0.0f;
+            note_ready = false;
+        } else {
+            debounce_timer += 1.0f / SAMPLE_RATE * BUFFER_SIZE;
+            if (debounce_timer >= debounce_threshold && !note_ready) {
+                current_note = note;
+                current_octave = octave;
+                current_midi = midi;
+                note_ready = true;
+                note_pending = true;
+                call_deferred("emit_note");
+            }
+        }
         low_volume_counter = 0; // Reset counter when a valid frequency is detected
     } else {
         low_volume_counter++;
@@ -231,6 +244,11 @@ void AudioInput::update_note_and_octave(float freq) {
             current_note = "";
             current_octave = "";
             current_midi = -1;
+            last_note = "";
+            debounce_timer = 0.0f;
+            note_ready = false;
+            silence_pending = true;
+            call_deferred("emit_silence");
         }
     }
 }
@@ -240,6 +258,13 @@ void AudioInput::emit_note() {
     UtilityFunctions::print("Emitting note: ", current_note, " (", current_octave, ", ", current_midi, ")");
     emit_signal("note_detected", current_note, current_octave, current_midi);
     note_pending = false;
+}
+
+void AudioInput::emit_silence() {
+    if(!silence_pending) return;
+    UtilityFunctions::print("Note Ended");
+    emit_signal("note_stopped");
+    silence_pending = false;
 }
 
 float AudioInput::detect_pitch_autocorrelation(const float* buffer, int size, int sample_rate) {

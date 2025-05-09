@@ -36,6 +36,12 @@ private:
     String current_octave = "";
     int current_midi = -1;
     bool note_pending = false;
+    bool silence_pending = false;
+
+    String last_note = "";
+    float debounce_timer = 0.0f;
+    const float debounce_threshold = 0.1f; // adjust as needed
+    bool note_ready = false;
 
 protected:
     static void _bind_methods();
@@ -68,6 +74,7 @@ public:
     void _on_device_selected(int index);
     void _on_start_pressed();
     void emit_note();
+    void emit_silence();
     static const String* get_note_names();
     static const std::map<String, int>& get_note_to_midi();
     static const std::map<String, String>& get_enharmonic_map();

@@ -8,6 +8,8 @@
 #include <godot_cpp/classes/color_rect.hpp>
 #include <godot_cpp/classes/h_box_container.hpp>
 #include <vector>
+#include <random>
+#include <chrono>
 #include "audio_input.h"
 
 namespace godot {
@@ -23,6 +25,8 @@ namespace godot {
     private:
         double time_passed = 0.0;
         float random_multiplier;
+        std::mt19937 rng; // Mersenne Twister engine
+
 
         AudioInput *audio_input = nullptr;
         Label *note_label = nullptr;
@@ -70,6 +74,7 @@ namespace godot {
         void set_mode(NoteyMode new_mode);
         void setup_feed_mode();
         void setup_jam_mode();
+        void generate_sequence();
         void initialize();
         void handle_note_input(int midi, const String& octave, float volume);
         void handle_feed(int midi, const String& octave, float volume);
@@ -80,6 +85,7 @@ namespace godot {
         void render_note_prompt();
         bool should_handle_note(int current_midi, String current_octave);
         void on_note_detected(String note, String octave, int midi);
+        void clear_note();
         
         Vector2 get_parent_scale(Node* node);
     };

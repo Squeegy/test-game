@@ -37,16 +37,15 @@ void Notey::_ready() {
 }
 
 void Notey::initialize() {
+    std::random_device rd;
+    rng = std::mt19937(rd());
+
     initial_x = get_scale().x;
     initial_y = get_scale().y;
     Callable func = callable_mp(this, &Notey::on_note_detected);
     UtilityFunctions::print("Callable valid: ", func.is_valid());
-    bool ok = audio_input->connect("note_detected", callable_mp(this, &Notey::on_note_detected));
-    if (!ok) {
-        UtilityFunctions::print("❌ Failed to connect to note_detected signal");
-    } else {
-        UtilityFunctions::print("✅ Connected to note_detected");
-    }
+    audio_input->connect("note_detected", callable_mp(this, &Notey::on_note_detected));
+    audio_input->connect("note_stopped", callable_mp(this, &Notey::clear_note));
     UtilityFunctions::print("Signals on AudioInput: ", audio_input->get_class());
 
 
@@ -112,13 +111,8 @@ void Notey::_process(double delta) {
         UtilityFunctions::print("Notey is happy!");
     }
     if (note_label) {
-        note_label->set_text("Detected Note: " + audio_input->get_current_note());
+        note_label->set_text("Detected Note: " + consumed_note);
     }
-    // Update debounce state every frame
-    String current_note = audio_input->get_current_note();
-    String current_octave = audio_input->get_current_note_octave();
-    int current_midi = audio_input->get_current_midi();
-    update_note_debounce(current_note, delta);
 }
 
 void Notey::update_status_bar(Control* bar_container, float value) {
@@ -137,39 +131,30 @@ void Notey::update_status_bar(Control* bar_container, float value) {
 
 }
 
-void Notey::update_note_debounce(const String& note, double delta) {
-    if (note.is_empty()) {
-        consumed_note = "";
-        consumed_octave = "";
-        consumed_midi = -1;
-        note_ready = false;
-        return;
-    }
-    if (note != last_note) {
-        debounce_timer = 0.0;
-        last_note = note;
-        consumed_note = "";
-        consumed_octave = "";
-        consumed_midi = -1;
-        note_ready = false;
-        return;
-    }
-
-    debounce_timer += delta;
-    if (debounce_timer >= debounce_threshold) {
-        note_ready = true;
-    }
-}
-
 bool Notey::should_handle_note(int current_midi, String current_octave) {
-    return note_ready && (current_midi != consumed_midi || current_octave != consumed_octave);
+    return (current_midi != consumed_midi || current_octave != consumed_octave);
 }
 
 void Notey::setup_feed_mode() {
     mode_label->set_text("Mode: Feed");
-    target_sequence = { "C", "E", "G" }; // eventually randomly generated
-    sequence_index = 0;
+    generate_sequence();
     render_note_prompt();
+}
+
+void Notey::generate_sequence() {
+    // Generate a sequence of notes for the feed mode
+    sequence_index = 0;
+    note_sequence.clear();
+    target_sequence.clear();
+    int min_length = 3;
+    int max_length = 9;
+    int length = min_length + int((max_length - min_length) * hunger); // Sequence Length between min inclusive and max exclusive
+    std::uniform_int_distribution<int> dist(0, 11); // 12 notes in an octave
+    for (int i = 0; i < length; ++i) {
+        int random_index = dist(rng); //rng->randi_range(0, notes_size - 1);
+        String note = AudioInput::get_note_names()[random_index];
+        target_sequence.push_back(note);
+    }
 }
 
 void Notey::setup_jam_mode() {
@@ -187,8 +172,16 @@ void Notey::on_note_detected(String note, String octave, int midi) {
         consumed_octave = octave;
         consumed_midi = midi;
     } else {
-        UtilityFunctions::print("Note not ready or already consumed!");
+        UtilityFunctions::print("Note already consumed!");
     }
+}
+
+void Notey::clear_note() {
+    UtilityFunctions::print("Note cleared!");
+    consumed_note = "";
+    consumed_octave = "";
+    consumed_midi = -1;
+    note_ready = false;
 }
 
 void Notey::handle_note_input(int midi, const String& octave, float volume) {
@@ -225,7 +218,7 @@ void Notey::handle_feed(int midi, const String& octave, float volume) {
         if (sequence_index >= target_sequence.size()) {
             UtilityFunctions::print("Sequence complete!");
             hunger += 0.1f;  // ✅ Feed Notey only once
-            sequence_index = 0;  // ready for a new sequence
+            generate_sequence();  // Generate a new sequence
             // Optionally trigger next round or mood change
         }
         render_note_prompt();
